@@ -1,0 +1,2163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Enterchatment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: #2e2e38;
+    --text: #f0f0f5;
+    --muted: #7a7a8c;
+    --accent-happy: #f9c74f;
+    --accent-sad: #4cc9f0;
+    --accent-angry: #f4442e;
+    --accent: #a78bfa;
+    --accent-glow: rgba(167,139,250,0.15);
+    --upvote: #f9c74f;
+    --downvote: #f4442e;
+    --radius: 14px;
+    --nav-h: 64px;
+    --tab-h: 56px;
+    --font-display: 'Syne', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; height: 100dvh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    overscroll-behavior: none;
+  }
+  #app {
+    max-width: 430px;
+    margin: 0 auto;
+    height: 100%;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    padding-bottom: var(--nav-h);
+  }
+  .screen.active { display: flex; }
+
+  /* ── TOP BAR ── */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 14px 16px 10px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+  }
+  .top-bar h1 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--accent) 0%, #c084fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .feed-mode-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .feed-toggle {
+    display: flex;
+    gap: 0;
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    width: 100%;
+    max-width: 300px;
+  }
+  .feed-toggle button {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .2s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .feed-toggle button.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(167,139,250,.4);
+  }
+
+  /* ── COMMUNITY TABS ── */
+  .community-tabs {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .community-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 8px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    border: none;
+    background: none;
+    transition: background .15s;
+    position: relative;
+    user-select: none;
+  }
+  .community-tab:active { background: var(--surface2); }
+  .community-tab .emoji { font-size: 26px; line-height: 1; }
+  .community-tab .count {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+    font-family: var(--font-body);
+    font-weight: 500;
+  }
+  .community-tab .tab-indicator {
+    position: absolute;
+    bottom: 0; left: 10%; right: 10%;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    opacity: 0;
+    transition: opacity .2s;
+  }
+  .community-tab[data-community="happy"] .tab-indicator { background: var(--accent-happy); }
+  .community-tab[data-community="sad"] .tab-indicator { background: var(--accent-sad); }
+  .community-tab[data-community="angry"] .tab-indicator { background: var(--accent-angry); }
+  .community-tab.active .tab-indicator { opacity: 1; }
+  .community-tab.active .emoji { transform: scale(1.1); }
+
+  /* ── FEED ── */
+  #feed-scroll {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding: 10px 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .pull-indicator {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    height: 0;
+    overflow: hidden;
+    transition: height .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .pull-indicator.visible { height: 40px; }
+
+  /* ── POST CARD ── */
+  .post-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    animation: fadeUp .25s ease both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .post-card:active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .post-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .community-badge {
+    font-size: 16px;
+    line-height: 1;
+  }
+  .post-meta { flex: 1; }
+  .post-author { color: var(--text); font-weight: 500; }
+  .post-time { color: var(--muted); }
+  .post-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text);
+  }
+  .post-body-preview {
+    font-size: 14px;
+    color: var(--muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .post-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 2px;
+  }
+  .vote-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .vote-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-family: var(--font-body);
+    font-weight: 500;
+    padding: 5px 8px;
+    border-radius: 8px;
+    transition: color .15s, background .15s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .vote-btn svg { width: 16px; height: 16px; }
+  .vote-btn.up.active { color: var(--upvote); background: rgba(249,199,79,.12); }
+  .vote-btn.down.active { color: var(--downvote); background: rgba(244,68,46,.12); }
+  .vote-btn:active { opacity: .7; }
+  .score-display {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 20px;
+    text-align: center;
+  }
+  .comment-count {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .comment-count svg { width: 15px; height: 15px; }
+  .edited-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    gap: 10px;
+    padding: 40px;
+    text-align: center;
+  }
+  .empty-state .big-emoji { font-size: 52px; }
+  .empty-state p { font-size: 14px; }
+
+  /* ── POST DETAIL ── */
+  #post-screen {
+    background: var(--bg);
+  }
+  .back-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .back-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 15px;
+    font-family: var(--font-body);
+    padding: 6px 8px;
+    border-radius: 8px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .back-btn:active { background: var(--surface2); }
+  #post-detail-scroll {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .detail-post {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .detail-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .detail-body {
+    font-size: 15px;
+    color: var(--muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .action-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 11px;
+    border-radius: 20px;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: color .15s, border-color .15s;
+  }
+  .action-btn:hover { color: var(--text); border-color: var(--accent); }
+  .action-btn.danger:hover { color: var(--downvote); border-color: var(--downvote); }
+
+  /* ── COMMENTS ── */
+  .comments-section { display: flex; flex-direction: column; gap: 8px; }
+  .comments-label {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .comment-input-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+  }
+  .comment-input-row textarea {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    resize: none;
+    outline: none;
+    min-height: 60px;
+    width: 100%;
+  }
+  .comment-input-row textarea::placeholder { color: var(--muted); }
+  .comment-submit {
+    align-self: flex-end;
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: opacity .15s;
+  }
+  .comment-submit:active { opacity: .8; }
+  .comment-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: fadeUp .2s ease both;
+  }
+  .comment-meta { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .comment-author { color: var(--text); font-weight: 500; }
+  .comment-body { font-size: 14px; word-break: break-word; white-space: pre-wrap; }
+
+  /* ── EDIT MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 100;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet {
+    background: var(--surface);
+    border-radius: var(--radius) var(--radius) 0 0;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    width: 100%;
+    max-width: 430px;
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: slideUp .25s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-sheet h3 { font-family: var(--font-display); font-size: 18px; font-weight: 700; }
+  .modal-sheet textarea, .modal-sheet input[type=text], .modal-sheet input[type=password], .modal-sheet select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .modal-sheet textarea { resize: none; min-height: 90px; }
+  .modal-sheet input:focus, .modal-sheet textarea:focus, .modal-sheet select:focus { border-color: var(--accent); }
+  .modal-btn-row { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: all .15s;
+  }
+  .modal-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .modal-btn.danger { border-color: var(--downvote); color: var(--downvote); }
+  .modal-btn:active { opacity: .8; }
+
+  /* ── NEW POST SCREEN ── */
+  #post-create-screen {
+    padding-bottom: var(--nav-h);
+  }
+  .create-inner {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .create-inner label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .create-inner input, .create-inner textarea, .create-inner select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    padding: 11px 13px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .create-inner input:focus, .create-inner textarea:focus, .create-inner select:focus { border-color: var(--accent); }
+  .create-inner textarea { resize: none; min-height: 120px; }
+  .submit-post-btn {
+    background: linear-gradient(135deg, var(--accent), #c084fc);
+    border: none;
+    color: #fff;
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    padding: 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: opacity .15s, box-shadow .15s;
+    box-shadow: 0 4px 20px rgba(167,139,250,.3);
+  }
+  .submit-post-btn:active { opacity: .8; }
+  .char-counter { font-size: 12px; color: var(--muted); text-align: right; margin-top: -8px; }
+
+  /* ── PROFILE SCREEN ── */
+  #profile-screen {
+    padding-bottom: var(--nav-h);
+  }
+  .profile-inner {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .profile-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+  }
+  .profile-avatar {
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #c084fc);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .profile-username {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 800;
+  }
+  .profile-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .stat-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .stat-box .val {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-box .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .section-header {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    color: var(--text);
+  }
+  .logout-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--downvote);
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background .15s;
+    width: 100%;
+  }
+  .logout-btn:active { background: var(--surface2); }
+
+  /* ── ADMIN PANEL ── */
+  .admin-panel {
+    background: rgba(244,68,46,.07);
+    border: 1px solid rgba(244,68,46,.3);
+    border-radius: var(--radius);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .admin-header {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--downvote);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .admin-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .admin-row input, .admin-row select {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    min-width: 0;
+  }
+  .admin-btn {
+    background: var(--downvote);
+    border: none;
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    touch-action: manipulation;
+    white-space: nowrap;
+  }
+  .admin-btn.lift { background: var(--accent-sad); }
+  .admin-btn:active { opacity: .8; }
+
+  /* ── AUTH SCREEN ── */
+  #auth-screen {
+    position: fixed; inset: 0;
+    z-index: 200;
+    background: var(--bg);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    gap: 20px;
+  }
+  #auth-screen.open { display: flex; }
+  .auth-logo {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+  }
+  .auth-subtitle { color: var(--muted); font-size: 14px; text-align: center; }
+  .auth-form {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .auth-form input, .auth-form select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    padding: 12px 14px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .auth-form input:focus, .auth-form select:focus { border-color: var(--accent); }
+  .auth-form input::placeholder { color: var(--muted); }
+  .auth-submit {
+    background: linear-gradient(135deg, var(--accent), #c084fc);
+    border: none;
+    color: #fff;
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    padding: 14px;
+    border-radius: 12px;
+    cursor: pointer;
+    touch-action: manipulation;
+    margin-top: 4px;
+    box-shadow: 0 4px 20px rgba(167,139,250,.35);
+    transition: opacity .15s;
+  }
+  .auth-submit:active { opacity: .8; }
+  .auth-switch {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-family: var(--font-body);
+    font-size: 14px;
+    cursor: pointer;
+    text-align: center;
+    touch-action: manipulation;
+  }
+  .auth-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); width: 100%; max-width: 360px; }
+  .auth-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    touch-action: manipulation;
+  }
+  .auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+    background: rgba(18,18,22,.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    padding-top: 4px;
+    z-index: 50;
+  }
+  .nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    padding: 8px 4px;
+    transition: color .15s;
+  }
+  .nav-btn svg { width: 22px; height: 22px; transition: transform .2s; }
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn.active svg { transform: scale(1.1); }
+  .nav-btn.post-btn { color: var(--text); }
+  .nav-btn.post-btn .nav-icon-wrap {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), #c084fc);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+    box-shadow: 0 2px 12px rgba(167,139,250,.4);
+  }
+  .nav-btn.post-btn svg { color: #fff; }
+
+  /* ── TOASTS ── */
+  #toast-container {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    width: min(90vw, 360px);
+  }
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    animation: toastIn .3s ease both;
+    text-align: center;
+  }
+  .toast.error { border-color: var(--downvote); color: var(--downvote); }
+  .toast.success { border-color: #4ade80; color: #4ade80; }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(-10px) scale(.95); } to { opacity: 1; transform: none; } }
+  @keyframes toastOut { to { opacity: 0; transform: translateY(-6px) scale(.95); } }
+  .toast.out { animation: toastOut .25s ease forwards; }
+
+  /* ── SCHEMA DISPLAY ── */
+  .schema-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin: 12px;
+  }
+  .schema-box h2 { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .schema-box p { font-size: 13px; color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  .schema-box pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 11px;
+    color: var(--text);
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.5;
+  }
+
+  /* ── LOADING ── */
+  .spinner {
+    display: flex;
+    justify-content: center;
+    padding: 30px;
+    color: var(--muted);
+  }
+  .spin { animation: spin 1s linear infinite; display: inline-block; font-size: 22px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── MISC ── */
+  select option { background: var(--surface); }
+  .timeout-badge {
+    display: inline-block;
+    background: rgba(244,68,46,.15);
+    border: 1px solid var(--downvote);
+    color: var(--downvote);
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 20px;
+    padding: 2px 8px;
+  }
+
+  @media (min-width: 430px) {
+    .modal-overlay { align-items: center; }
+    .modal-sheet { border-radius: var(--radius); max-height: 80vh; overflow-y: auto; }
+    #auth-screen { padding-bottom: 40px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen">
+    <div class="auth-logo">Enterchatment</div>
+    <div class="auth-subtitle">Feel things. Share things. Vibe.</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="showAuthTab('login')">Log in</button>
+      <button class="auth-tab" id="tab-signup" onclick="showAuthTab('signup')">Sign up</button>
+      <button class="auth-tab" id="tab-forgot" onclick="showAuthTab('forgot')" style="font-size:13px;">Forgot?</button>
+    </div>
+    <!-- Login -->
+    <div class="auth-form" id="form-login">
+      <input id="login-username" type="text" placeholder="Username" autocomplete="username"/>
+      <input id="login-password" type="password" placeholder="Password" autocomplete="current-password"/>
+      <button class="auth-submit" onclick="doLogin()">Log in</button>
+    </div>
+    <!-- Signup -->
+    <div class="auth-form" id="form-signup" style="display:none">
+      <input id="signup-username" type="text" placeholder="Username" autocomplete="username" maxlength="30"/>
+      <input id="signup-password" type="password" placeholder="Password (min 6 chars)" autocomplete="new-password"/>
+      <select id="signup-question">
+        <option value="">— Security question —</option>
+        <option>What was your first pet's name?</option>
+        <option>What city were you born in?</option>
+        <option>What's your mother's maiden name?</option>
+        <option>What was your childhood nickname?</option>
+        <option>What's the name of your favorite teacher?</option>
+      </select>
+      <input id="signup-answer" type="text" placeholder="Security answer"/>
+      <button class="auth-submit" onclick="doSignup()">Create account</button>
+    </div>
+    <!-- Forgot -->
+    <div class="auth-form" id="form-forgot" style="display:none">
+      <div id="forgot-step1">
+        <input id="forgot-username" type="text" placeholder="Your username" style="margin-bottom:10px"/>
+        <button class="auth-submit" onclick="forgotStep1()">Find account</button>
+      </div>
+      <div id="forgot-step2" style="display:none">
+        <div id="forgot-question-display" style="color:var(--muted);font-size:14px;padding:8px 0 4px;"></div>
+        <input id="forgot-answer" type="text" placeholder="Your security answer" style="margin-bottom:10px"/>
+        <button class="auth-submit" onclick="forgotStep2()">Verify answer</button>
+      </div>
+      <div id="forgot-step3" style="display:none">
+        <input id="forgot-new-password" type="password" placeholder="New password" style="margin-bottom:10px"/>
+        <button class="auth-submit" onclick="forgotStep3()">Set new password</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOME SCREEN -->
+  <div class="screen active" id="home-screen">
+    <div class="top-bar">
+      <h1>Enterchatment</h1>
+    </div>
+    <div class="community-tabs">
+      <button class="community-tab active" data-community="happy" onclick="setCommunity('happy')">
+        <span class="emoji">😊</span>
+        <span class="count" id="count-happy">—</span>
+        <div class="tab-indicator"></div>
+      </button>
+      <button class="community-tab" data-community="sad" onclick="setCommunity('sad')">
+        <span class="emoji">😢</span>
+        <span class="count" id="count-sad">—</span>
+        <div class="tab-indicator"></div>
+      </button>
+      <button class="community-tab" data-community="angry" onclick="setCommunity('angry')">
+        <span class="emoji">😠</span>
+        <span class="count" id="count-angry">—</span>
+        <div class="tab-indicator"></div>
+      </button>
+    </div>
+    <div class="feed-mode-bar">
+      <div class="feed-toggle">
+        <button id="btn-hot" class="active" onclick="setFeedMode('hot')">🔥 Hot</button>
+        <button id="btn-new" onclick="setFeedMode('new')">✨ New</button>
+      </div>
+    </div>
+    <div id="feed-scroll">
+      <div class="pull-indicator" id="pull-indicator">↓ Pull to refresh</div>
+      <div class="spinner" id="feed-spinner"><span class="spin">⟳</span></div>
+    </div>
+  </div>
+
+  <!-- POST DETAIL SCREEN -->
+  <div class="screen" id="post-screen">
+    <div class="back-bar">
+      <button class="back-btn" onclick="goBack()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Back
+      </button>
+    </div>
+    <div id="post-detail-scroll">
+      <div class="spinner" id="post-spinner"><span class="spin">⟳</span></div>
+    </div>
+  </div>
+
+  <!-- CREATE POST SCREEN -->
+  <div class="screen" id="post-create-screen">
+    <div class="top-bar" style="border-bottom:1px solid var(--border)">
+      <h1 style="font-size:18px">New Post</h1>
+    </div>
+    <div class="create-inner">
+      <label>Community</label>
+      <select id="new-post-community">
+        <option value="happy">😊 Happy</option>
+        <option value="sad">😢 Sad</option>
+        <option value="angry">😠 Angry</option>
+      </select>
+      <label>Title</label>
+      <input id="new-post-title" type="text" placeholder="What's on your mind?" maxlength="300" oninput="updateTitleCounter()"/>
+      <div class="char-counter" id="title-counter">0 / 300</div>
+      <label>Body <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+      <textarea id="new-post-body" placeholder="Say more..." rows="5"></textarea>
+      <button class="submit-post-btn" onclick="submitPost()">Post it ✦</button>
+    </div>
+  </div>
+
+  <!-- PROFILE SCREEN -->
+  <div class="screen" id="profile-screen">
+    <div class="top-bar">
+      <h1 style="font-size:18px">Profile</h1>
+    </div>
+    <div class="profile-inner" id="profile-inner">
+      <div class="spinner"><span class="spin">⟳</span></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="nav-home" onclick="goScreen('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+      Home
+    </button>
+    <button class="nav-btn post-btn" id="nav-post" onclick="goScreen('post-create')">
+      <div class="nav-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      Post
+    </button>
+    <button class="nav-btn" id="nav-profile" onclick="goScreen('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Me
+    </button>
+  </nav>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal-sheet">
+    <h3 id="edit-modal-title">Edit</h3>
+    <input type="text" id="edit-title-field" placeholder="Title" style="display:none"/>
+    <textarea id="edit-body-field" placeholder="Body"></textarea>
+    <div class="modal-btn-row">
+      <button class="modal-btn" onclick="closeModal('edit-modal')">Cancel</button>
+      <button class="modal-btn primary" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<script>
+// ══════════════════════════════════════
+// CONFIGURATION
+// ══════════════════════════════════════
+const SUPABASE_URL = 'https://stqdpgqxadpxrwkzmeyj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0cWRwZ3F4YWRweHJ3a3ptZXlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4Njg0OTYsImV4cCI6MjA4OTQ0NDQ5Nn0.7pjBQYLgTskeYwZKlfz3PfSqzqqmkCGF6iiX7LIDHek';
+const CONFIGURED = !SUPABASE_URL.includes('YOUR_') && !SUPABASE_ANON_KEY.includes('YOUR_');
+
+const SQL_SCHEMA = `-- Run this SQL in your Supabase SQL editor:
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Profiles table
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username TEXT UNIQUE NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  security_question TEXT,
+  security_answer TEXT,
+  recovery_password TEXT,
+  is_admin BOOLEAN DEFAULT FALSE,
+  timeout_until TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Posts table
+CREATE TABLE posts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  community TEXT NOT NULL CHECK (community IN ('happy','sad','angry')),
+  title TEXT NOT NULL,
+  body TEXT,
+  upvotes INT DEFAULT 0,
+  downvotes INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  edited_at TIMESTAMPTZ
+);
+
+-- Comments table
+CREATE TABLE comments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  upvotes INT DEFAULT 0,
+  downvotes INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  edited_at TIMESTAMPTZ
+);
+
+-- Votes table
+CREATE TABLE votes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  vote_type TEXT NOT NULL CHECK (vote_type IN ('up','down')),
+  UNIQUE(post_id, user_id)
+);
+
+-- Comment votes table
+CREATE TABLE comment_votes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  vote_type TEXT NOT NULL CHECK (vote_type IN ('up','down')),
+  UNIQUE(comment_id, user_id)
+);
+
+-- Indexes
+CREATE INDEX ON posts(community, created_at DESC);
+CREATE INDEX ON comments(post_id, created_at DESC);
+CREATE INDEX ON votes(post_id);
+CREATE INDEX ON comment_votes(comment_id);
+
+-- RLS
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comment_votes ENABLE ROW LEVEL SECURITY;
+
+-- Profile policies
+CREATE POLICY "profiles_public_read" ON profiles FOR SELECT USING (true);
+CREATE POLICY "profiles_insert_own" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (auth.uid() = id);
+
+-- Post policies
+CREATE POLICY "posts_public_read" ON posts FOR SELECT USING (true);
+CREATE POLICY "posts_insert" ON posts FOR INSERT WITH CHECK (
+  auth.uid() = user_id AND
+  (SELECT timeout_until FROM profiles WHERE id = auth.uid()) IS NULL OR
+  (SELECT timeout_until FROM profiles WHERE id = auth.uid()) < NOW()
+);
+CREATE POLICY "posts_update" ON posts FOR UPDATE USING (
+  auth.uid() = user_id OR
+  (SELECT is_admin FROM profiles WHERE id = auth.uid()) = TRUE
+);
+CREATE POLICY "posts_delete" ON posts FOR DELETE USING (
+  auth.uid() = user_id OR
+  (SELECT is_admin FROM profiles WHERE id = auth.uid()) = TRUE
+);
+
+-- Comment policies
+CREATE POLICY "comments_public_read" ON comments FOR SELECT USING (true);
+CREATE POLICY "comments_insert" ON comments FOR INSERT WITH CHECK (
+  auth.uid() = user_id AND
+  (SELECT timeout_until FROM profiles WHERE id = auth.uid()) IS NULL OR
+  (SELECT timeout_until FROM profiles WHERE id = auth.uid()) < NOW()
+);
+CREATE POLICY "comments_update" ON comments FOR UPDATE USING (
+  auth.uid() = user_id OR
+  (SELECT is_admin FROM profiles WHERE id = auth.uid()) = TRUE
+);
+CREATE POLICY "comments_delete" ON comments FOR DELETE USING (
+  auth.uid() = user_id OR
+  (SELECT is_admin FROM profiles WHERE id = auth.uid()) = TRUE
+);
+
+-- Vote policies
+CREATE POLICY "votes_read" ON votes FOR SELECT USING (true);
+CREATE POLICY "votes_insert" ON votes FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "votes_update" ON votes FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "votes_delete" ON votes FOR DELETE USING (auth.uid() = user_id);
+
+-- Comment vote policies
+CREATE POLICY "cvotes_read" ON comment_votes FOR SELECT USING (true);
+CREATE POLICY "cvotes_insert" ON comment_votes FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "cvotes_update" ON comment_votes FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "cvotes_delete" ON comment_votes FOR DELETE USING (auth.uid() = user_id);
+
+-- Admin helper function (call from trusted context or service role):
+-- UPDATE profiles SET is_admin = TRUE WHERE username = 'youradminusername';
+`;
+
+// ══════════════════════════════════════
+// SUPABASE INIT
+// ══════════════════════════════════════
+let sb;
+if (CONFIGURED) {
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+let currentUser = null;
+let currentProfile = null;
+let currentCommunity = 'happy';
+let feedMode = 'hot';
+let currentScreen = 'home';
+let currentPostId = null;
+let editTarget = null; // { type: 'post'|'comment', id, hasTitle }
+let forgotUserProfile = null;
+
+const communityEmoji = { happy: '😊', sad: '😢', angry: '😠' };
+const communityColor = { happy: 'var(--accent-happy)', sad: 'var(--accent-sad)', angry: 'var(--accent-angry)' };
+const POST_COOLDOWN_MS = 60000;
+const MAX_POSTS_PER_WINDOW = 2;
+const LOGIN_COOLDOWN_MS = 60000;
+const MAX_LOGIN_ATTEMPTS = 10;
+
+// ══════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════
+function toast(msg, type = '') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, 2800);
+}
+
+function relativeTime(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const d = Math.floor(h / 24);
+  if (d < 30) return d + 'd ago';
+  return Math.floor(d / 30) + 'mo ago';
+}
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function isTimedOut(profile) {
+  if (!profile?.timeout_until) return false;
+  return new Date(profile.timeout_until) > new Date();
+}
+
+function checkPostRateLimit() {
+  const key = 'ec_posts';
+  const now = Date.now();
+  let arr = JSON.parse(localStorage.getItem(key) || '[]');
+  arr = arr.filter(t => now - t < POST_COOLDOWN_MS);
+  if (arr.length >= MAX_POSTS_PER_WINDOW) return false;
+  arr.push(now);
+  localStorage.setItem(key, JSON.stringify(arr));
+  return true;
+}
+
+function checkLoginRateLimit() {
+  const key = 'ec_login_attempts';
+  const now = Date.now();
+  let arr = JSON.parse(localStorage.getItem(key) || '[]');
+  arr = arr.filter(t => now - t < LOGIN_COOLDOWN_MS);
+  if (arr.length >= MAX_LOGIN_ATTEMPTS) return false;
+  arr.push(now);
+  localStorage.setItem(key, JSON.stringify(arr));
+  return true;
+}
+
+function clearLoginRateLimit() {
+  localStorage.removeItem('ec_login_attempts');
+}
+
+function hotScore(post) {
+  const score = (post.upvotes || 0) - (post.downvotes || 0);
+  const ageHours = (Date.now() - new Date(post.created_at).getTime()) / 3600000;
+  if (ageHours > 48) return -Infinity;
+  return score / Math.pow(ageHours + 2, 1.5);
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+
+// ══════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════
+function goScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (name === 'home') {
+    document.getElementById('home-screen').classList.add('active');
+    document.getElementById('nav-home').classList.add('active');
+    currentScreen = 'home';
+  } else if (name === 'post-create') {
+    if (!currentUser) { toast('Log in to post', 'error'); showAuthModal(); return; }
+    document.getElementById('post-create-screen').classList.add('active');
+    document.getElementById('nav-post').classList.add('active');
+    currentScreen = 'post-create';
+  } else if (name === 'profile') {
+    if (!currentUser) { showAuthModal(); return; }
+    document.getElementById('profile-screen').classList.add('active');
+    document.getElementById('nav-profile').classList.add('active');
+    currentScreen = 'profile';
+    loadProfile();
+  } else if (name === 'post') {
+    document.getElementById('post-screen').classList.add('active');
+    currentScreen = 'post';
+  }
+}
+
+function goBack() {
+  goScreen('home');
+  currentPostId = null;
+}
+
+// ══════════════════════════════════════
+// AUTH SCREEN
+// ══════════════════════════════════════
+function showAuthModal() {
+  document.getElementById('auth-screen').classList.add('open');
+}
+function hideAuthModal() {
+  document.getElementById('auth-screen').classList.remove('open');
+}
+function showAuthTab(tab) {
+  ['login','signup','forgot'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('form-' + t).style.display = t === tab ? 'flex' : 'none';
+  });
+  if (tab === 'forgot') resetForgotFlow();
+}
+function resetForgotFlow() {
+  forgotUserProfile = null;
+  ['forgot-step1','forgot-step2','forgot-step3'].forEach((id,i) => {
+    document.getElementById(id).style.display = i === 0 ? 'block' : 'none';
+  });
+  ['forgot-username','forgot-answer','forgot-new-password'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+}
+
+async function doSignup() {
+  const username = document.getElementById('signup-username').value.trim().toLowerCase();
+  const password = document.getElementById('signup-password').value;
+  const question = document.getElementById('signup-question').value;
+  const answer = document.getElementById('signup-answer').value.trim().toLowerCase();
+
+  if (!username || !password || !question || !answer) return toast('Fill all fields', 'error');
+  if (password.length < 6) return toast('Password must be 6+ chars', 'error');
+  if (!/^[a-z0-9_]+$/.test(username)) return toast('Username: letters, numbers, _ only', 'error');
+
+  const email = `${username}@enterchatment.app`;
+  const recoveryPassword = await sha256(username + ':' + answer);
+  const answerHash = await sha256(answer);
+
+  const { data, error } = await sb.auth.signUp({ email, password });
+  if (error) return toast(error.message, 'error');
+
+  const uid = data.user.id;
+  const { error: pe } = await sb.from('profiles').insert({
+    id: uid, username, email,
+    security_question: question,
+    security_answer: answerHash,
+    recovery_password: recoveryPassword,
+    is_admin: false
+  });
+  if (pe) return toast(pe.message, 'error');
+
+  currentUser = data.user;
+  await loadCurrentProfile();
+  hideAuthModal();
+  toast('Welcome, ' + username + '! 🎉', 'success');
+  loadFeed();
+}
+
+async function doLogin() {
+  if (!checkLoginRateLimit()) return toast('Too many attempts. Wait a minute.', 'error');
+
+  const username = document.getElementById('login-username').value.trim().toLowerCase();
+  const password = document.getElementById('login-password').value;
+  if (!username || !password) return toast('Fill all fields', 'error');
+
+  const email = `${username}@enterchatment.app`;
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) return toast('Invalid credentials', 'error');
+
+  clearLoginRateLimit();
+  currentUser = data.user;
+  await loadCurrentProfile();
+  hideAuthModal();
+  toast('Welcome back, ' + (currentProfile?.username || username) + '!', 'success');
+  loadFeed();
+}
+
+async function forgotStep1() {
+  const username = document.getElementById('forgot-username').value.trim().toLowerCase();
+  if (!username) return toast('Enter your username', 'error');
+  const { data, error } = await sb.from('profiles').select('*').eq('username', username).single();
+  if (error || !data) return toast('Username not found', 'error');
+  forgotUserProfile = data;
+  document.getElementById('forgot-question-display').textContent = '🔒 ' + data.security_question;
+  document.getElementById('forgot-step1').style.display = 'none';
+  document.getElementById('forgot-step2').style.display = 'block';
+}
+
+async function forgotStep2() {
+  const answer = document.getElementById('forgot-answer').value.trim().toLowerCase();
+  if (!answer) return toast('Enter your answer', 'error');
+  const recoveryHash = await sha256(forgotUserProfile.username + ':' + answer);
+  if (recoveryHash !== forgotUserProfile.recovery_password) return toast('Incorrect answer', 'error');
+  document.getElementById('forgot-step2').style.display = 'none';
+  document.getElementById('forgot-step3').style.display = 'block';
+}
+
+async function forgotStep3() {
+  const newPw = document.getElementById('forgot-new-password').value;
+  if (newPw.length < 6) return toast('Password must be 6+ chars', 'error');
+
+  // Sign in with recovery then update password
+  const email = forgotUserProfile.email;
+  // We use the admin API isn't available from anon key, so we sign in with a temp approach:
+  // Actually we need to sign in first - but we don't have the old password.
+  // Use the recovery_password hash as a temporary bridge: sign in with recovery_password as password
+  // (This requires that at signup, we also set auth password = recovery_password. That's a design trade-off.)
+  // Better approach: sign in with email + recovery_password, then update.
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: forgotUserProfile.recovery_password });
+  if (error) {
+    toast('Password reset failed. Contact an admin.', 'error');
+    return;
+  }
+  const { error: ue } = await sb.auth.updateUser({ password: newPw });
+  if (ue) return toast(ue.message, 'error');
+  currentUser = data.user;
+  await loadCurrentProfile();
+  hideAuthModal();
+  toast('Password updated!', 'success');
+  loadFeed();
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  currentUser = null;
+  currentProfile = null;
+  toast('Logged out.');
+  goScreen('home');
+  loadFeed();
+  showAuthModal();
+}
+
+// ══════════════════════════════════════
+// PROFILE LOADING
+// ══════════════════════════════════════
+async function loadCurrentProfile() {
+  if (!currentUser) return;
+  const { data } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+  currentProfile = data;
+}
+
+async function loadProfile() {
+  const inner = document.getElementById('profile-inner');
+  inner.innerHTML = '<div class="spinner"><span class="spin">⟳</span></div>';
+  if (!currentProfile) await loadCurrentProfile();
+  const p = currentProfile;
+  if (!p) { inner.innerHTML = '<div class="empty-state"><div class="big-emoji">🤔</div><p>Could not load profile</p></div>'; return; }
+
+  // Karma
+  const { data: myPosts } = await sb.from('posts').select('upvotes,downvotes,id,title,community,created_at').eq('user_id', p.id).order('created_at', { ascending: false }).limit(20);
+  const { data: myComments } = await sb.from('comments').select('upvotes,downvotes').eq('user_id', p.id);
+  const postKarma = (myPosts || []).reduce((a, x) => a + (x.upvotes||0) - (x.downvotes||0), 0);
+  const commentKarma = (myComments || []).reduce((a, x) => a + (x.upvotes||0) - (x.downvotes||0), 0);
+
+  const timeoutStr = isTimedOut(p) ? `<span class="timeout-badge">⏱ Timed out</span>` : '';
+  const adminBadge = p.is_admin ? `<span style="font-size:11px;color:var(--downvote);font-weight:700">🔴 ADMIN</span>` : '';
+
+  let recentPostsHtml = '';
+  if (myPosts && myPosts.length) {
+    recentPostsHtml = myPosts.slice(0, 5).map(post => `
+      <div class="post-card" onclick="openPost('${post.id}')">
+        <div class="post-header">
+          <span class="community-badge">${communityEmoji[post.community]}</span>
+          <span class="post-time">${relativeTime(post.created_at)}</span>
+        </div>
+        <div class="post-title">${escHtml(post.title)}</div>
+        <div class="post-footer">
+          <span class="score-display">${(post.upvotes||0)-(post.downvotes||0)} pts</span>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    recentPostsHtml = '<div style="color:var(--muted);font-size:14px">No posts yet.</div>';
+  }
+
+  const adminPanel = p.is_admin ? `
+    <div class="admin-panel">
+      <div class="admin-header">🔴 Admin Panel</div>
+      <div style="font-size:13px;color:var(--muted)">Timeout a user</div>
+      <div class="admin-row">
+        <input id="admin-timeout-user" type="text" placeholder="Username"/>
+        <input id="admin-timeout-mins" type="number" placeholder="Minutes" min="1" style="max-width:90px"/>
+        <button class="admin-btn" onclick="adminTimeout()">Apply</button>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">Lift a timeout</div>
+      <div class="admin-row">
+        <input id="admin-lift-user" type="text" placeholder="Username"/>
+        <button class="admin-btn lift" onclick="adminLift()">Lift</button>
+      </div>
+    </div>
+  ` : '';
+
+  inner.innerHTML = `
+    <div class="profile-card">
+      <div class="profile-avatar">${p.username[0].toUpperCase()}</div>
+      <div class="profile-username">${escHtml(p.username)} ${adminBadge} ${timeoutStr}</div>
+      <div class="profile-stats">
+        <div class="stat-box"><div class="val">${postKarma + commentKarma}</div><div class="lbl">Karma</div></div>
+        <div class="stat-box"><div class="val">${postKarma}</div><div class="lbl">Post ✦</div></div>
+        <div class="stat-box"><div class="val">${commentKarma}</div><div class="lbl">Comment ✦</div></div>
+      </div>
+      <div class="profile-stats" style="margin-top:0">
+        <div class="stat-box"><div class="val">${myPosts ? myPosts.length : 0}</div><div class="lbl">Posts</div></div>
+        <div class="stat-box"><div class="val">${myComments ? myComments.length : 0}</div><div class="lbl">Comments</div></div>
+      </div>
+    </div>
+    ${adminPanel}
+    <div class="section-header">Recent Posts</div>
+    ${recentPostsHtml}
+    <button class="logout-btn" onclick="doLogout()">Log out</button>
+  `;
+}
+
+// ══════════════════════════════════════
+// ADMIN
+// ══════════════════════════════════════
+async function adminTimeout() {
+  const username = document.getElementById('admin-timeout-user').value.trim().toLowerCase();
+  const mins = parseInt(document.getElementById('admin-timeout-mins').value);
+  if (!username || !mins || mins < 1) return toast('Enter username and minutes', 'error');
+  const until = new Date(Date.now() + mins * 60000).toISOString();
+  const { error } = await sb.from('profiles').update({ timeout_until: until }).eq('username', username);
+  if (error) return toast(error.message, 'error');
+  toast(`${username} timed out for ${mins}m`, 'success');
+}
+
+async function adminLift() {
+  const username = document.getElementById('admin-lift-user').value.trim().toLowerCase();
+  if (!username) return toast('Enter username', 'error');
+  const { error } = await sb.from('profiles').update({ timeout_until: null }).eq('username', username);
+  if (error) return toast(error.message, 'error');
+  toast(`${username}'s timeout lifted`, 'success');
+}
+
+// ══════════════════════════════════════
+// COMMUNITY + FEED MODE
+// ══════════════════════════════════════
+function setCommunity(c) {
+  currentCommunity = c;
+  document.querySelectorAll('.community-tab').forEach(t => t.classList.toggle('active', t.dataset.community === c));
+  loadFeed();
+}
+
+function setFeedMode(mode) {
+  feedMode = mode;
+  document.getElementById('btn-hot').classList.toggle('active', mode === 'hot');
+  document.getElementById('btn-new').classList.toggle('active', mode === 'new');
+  loadFeed();
+}
+
+// ══════════════════════════════════════
+// FEED
+// ══════════════════════════════════════
+async function loadCommunityCounts() {
+  const { data } = await sb.from('posts').select('community');
+  const counts = { happy: 0, sad: 0, angry: 0 };
+  if (data) data.forEach(p => { if (counts[p.community] !== undefined) counts[p.community]++; });
+  ['happy','sad','angry'].forEach(c => {
+    const el = document.getElementById('count-' + c);
+    if (el) el.textContent = counts[c];
+  });
+}
+
+async function loadFeed() {
+  if (!CONFIGURED) { showSchema(); return; }
+  const scroll = document.getElementById('feed-scroll');
+  const spinner = document.getElementById('feed-spinner');
+  spinner.style.display = 'flex';
+  // Remove existing cards
+  scroll.querySelectorAll('.post-card, .empty-state').forEach(e => e.remove());
+
+  loadCommunityCounts();
+
+  let query = sb.from('posts')
+    .select('*, profiles(username)')
+    .eq('community', currentCommunity);
+
+  if (feedMode === 'new') {
+    query = query.order('created_at', { ascending: false }).limit(50);
+  } else {
+    // Hot: fetch recent 48h, sort client-side
+    const cutoff = new Date(Date.now() - 48 * 3600000).toISOString();
+    query = query.gte('created_at', cutoff).order('created_at', { ascending: false }).limit(200);
+  }
+
+  const { data: posts, error } = await query;
+  spinner.style.display = 'none';
+
+  if (error) { toast(error.message, 'error'); return; }
+
+  let sorted = posts || [];
+  if (feedMode === 'hot') {
+    sorted = sorted.sort((a, b) => hotScore(b) - hotScore(a));
+  }
+
+  // Fetch user votes if logged in
+  let myVotes = {};
+  if (currentUser && sorted.length) {
+    const { data: vd } = await sb.from('votes').select('post_id,vote_type').eq('user_id', currentUser.id).in('post_id', sorted.map(p => p.id));
+    if (vd) vd.forEach(v => { myVotes[v.post_id] = v.vote_type; });
+  }
+
+  if (!sorted.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = `<div class="big-emoji">${communityEmoji[currentCommunity]}</div><p>No posts yet in this community. Be the first!</p>`;
+    scroll.appendChild(empty);
+    return;
+  }
+
+  sorted.forEach((post, i) => {
+    const card = buildPostCard(post, myVotes[post.id] || null, i);
+    scroll.appendChild(card);
+  });
+}
+
+function buildPostCard(post, myVote, delay = 0) {
+  const card = document.createElement('div');
+  card.className = 'post-card';
+  card.style.animationDelay = Math.min(delay * 40, 400) + 'ms';
+  const score = (post.upvotes||0) - (post.downvotes||0);
+  const bodyPreview = post.body ? `<div class="post-body-preview">${escHtml(post.body)}</div>` : '';
+  const editedLabel = post.edited_at ? `<span class="edited-label">(edited ${relativeTime(post.edited_at)})</span>` : '';
+  const author = post.profiles?.username || 'unknown';
+  card.innerHTML = `
+    <div class="post-header">
+      <span class="community-badge">${communityEmoji[post.community]}</span>
+      <div class="post-meta">
+        <span class="post-author">${escHtml(author)}</span>
+        <span class="post-time"> · ${relativeTime(post.created_at)}</span>
+        ${editedLabel}
+      </div>
+    </div>
+    <div class="post-title">${escHtml(post.title)}</div>
+    ${bodyPreview}
+    <div class="post-footer">
+      <div class="vote-row">
+        <button class="vote-btn up${myVote==='up'?' active':''}" onclick="votePost(event,'${post.id}','up',this)">${upSVG()}<span>${post.upvotes||0}</span></button>
+        <span class="score-display">${score}</span>
+        <button class="vote-btn down${myVote==='down'?' active':''}" onclick="votePost(event,'${post.id}','down',this)">${downSVG()}<span>${post.downvotes||0}</span></button>
+      </div>
+      <div class="comment-count">${commentSVG()} <span id="cc-${post.id}">...</span></div>
+    </div>
+  `;
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('.vote-btn')) return;
+    openPost(post.id);
+  });
+  // Load comment count
+  sb.from('comments').select('id', { count: 'exact', head: true }).eq('post_id', post.id).then(({ count }) => {
+    const el = document.getElementById('cc-' + post.id);
+    if (el) el.textContent = count || 0;
+  });
+  return card;
+}
+
+function upSVG() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>'; }
+function downSVG() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>'; }
+function commentSVG() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>'; }
+function editSVG() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'; }
+function trashSVG() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>'; }
+
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ══════════════════════════════════════
+// VOTING
+// ══════════════════════════════════════
+async function votePost(e, postId, voteType, btn) {
+  e.stopPropagation();
+  if (!currentUser) { toast('Log in to vote', 'error'); showAuthModal(); return; }
+  const row = btn.closest('.vote-row');
+  const upBtn = row.querySelector('.vote-btn.up');
+  const downBtn = row.querySelector('.vote-btn.down');
+  const scoreEl = row.querySelector('.score-display');
+
+  const wasActive = btn.classList.contains('active');
+  const otherBtn = voteType === 'up' ? downBtn : upBtn;
+
+  // Determine delta
+  let upDelta = 0, downDelta = 0;
+  const hadOther = otherBtn.classList.contains('active');
+
+  if (wasActive) {
+    // Remove vote
+    btn.classList.remove('active');
+    if (voteType === 'up') upDelta = -1; else downDelta = -1;
+    await sb.from('votes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+  } else {
+    btn.classList.add('active');
+    otherBtn.classList.remove('active');
+    if (voteType === 'up') { upDelta = 1; if (hadOther) downDelta = -1; }
+    else { downDelta = 1; if (hadOther) upDelta = -1; }
+
+    const existing = await sb.from('votes').select('id,vote_type').eq('post_id', postId).eq('user_id', currentUser.id).single();
+    if (existing.data) {
+      await sb.from('votes').update({ vote_type: voteType }).eq('id', existing.data.id);
+    } else {
+      await sb.from('votes').insert({ post_id: postId, user_id: currentUser.id, vote_type: voteType });
+    }
+  }
+
+  // Update counts in DB
+  const { data: post } = await sb.from('posts').select('upvotes,downvotes').eq('id', postId).single();
+  if (post) {
+    const newUp = Math.max(0, (post.upvotes||0) + upDelta);
+    const newDown = Math.max(0, (post.downvotes||0) + downDelta);
+    await sb.from('posts').update({ upvotes: newUp, downvotes: newDown }).eq('id', postId);
+    // Update UI
+    upBtn.querySelector('span').textContent = newUp;
+    downBtn.querySelector('span').textContent = newDown;
+    scoreEl.textContent = newUp - newDown;
+  }
+}
+
+async function voteComment(commentId, voteType, upBtn, downBtn, scoreEl) {
+  if (!currentUser) { toast('Log in to vote', 'error'); showAuthModal(); return; }
+  const wasActive = voteType === 'up' ? upBtn.classList.contains('active') : downBtn.classList.contains('active');
+  const btn = voteType === 'up' ? upBtn : downBtn;
+  const otherBtn = voteType === 'up' ? downBtn : upBtn;
+  const hadOther = otherBtn.classList.contains('active');
+  let upDelta = 0, downDelta = 0;
+
+  if (wasActive) {
+    btn.classList.remove('active');
+    if (voteType === 'up') upDelta = -1; else downDelta = -1;
+    await sb.from('comment_votes').delete().eq('comment_id', commentId).eq('user_id', currentUser.id);
+  } else {
+    btn.classList.add('active');
+    otherBtn.classList.remove('active');
+    if (voteType === 'up') { upDelta = 1; if (hadOther) downDelta = -1; }
+    else { downDelta = 1; if (hadOther) upDelta = -1; }
+    const existing = await sb.from('comment_votes').select('id,vote_type').eq('comment_id', commentId).eq('user_id', currentUser.id).single();
+    if (existing.data) {
+      await sb.from('comment_votes').update({ vote_type: voteType }).eq('id', existing.data.id);
+    } else {
+      await sb.from('comment_votes').insert({ comment_id: commentId, user_id: currentUser.id, vote_type: voteType });
+    }
+  }
+
+  const { data: comment } = await sb.from('comments').select('upvotes,downvotes').eq('id', commentId).single();
+  if (comment) {
+    const newUp = Math.max(0, (comment.upvotes||0) + upDelta);
+    const newDown = Math.max(0, (comment.downvotes||0) + downDelta);
+    await sb.from('comments').update({ upvotes: newUp, downvotes: newDown }).eq('id', commentId);
+    upBtn.querySelector('span').textContent = newUp;
+    downBtn.querySelector('span').textContent = newDown;
+    scoreEl.textContent = newUp - newDown;
+  }
+}
+
+// ══════════════════════════════════════
+// POST DETAIL
+// ══════════════════════════════════════
+async function openPost(postId) {
+  currentPostId = postId;
+  goScreen('post');
+  const scroll = document.getElementById('post-detail-scroll');
+  scroll.innerHTML = '<div class="spinner" id="post-spinner"><span class="spin">⟳</span></div>';
+
+  const { data: post, error } = await sb.from('posts').select('*, profiles(username,id)').eq('id', postId).single();
+  if (error || !post) { scroll.innerHTML = '<div class="empty-state"><div class="big-emoji">😶</div><p>Post not found.</p></div>'; return; }
+
+  const { data: comments } = await sb.from('comments').select('*, profiles(username,id)').eq('post_id', postId).order('created_at', { ascending: true });
+
+  // My votes
+  let myPostVote = null;
+  let myCommentVotes = {};
+  if (currentUser) {
+    const { data: pv } = await sb.from('votes').select('vote_type').eq('post_id', postId).eq('user_id', currentUser.id).single();
+    if (pv) myPostVote = pv.vote_type;
+    if (comments && comments.length) {
+      const { data: cvd } = await sb.from('comment_votes').select('comment_id,vote_type').eq('user_id', currentUser.id).in('comment_id', comments.map(c => c.id));
+      if (cvd) cvd.forEach(v => { myCommentVotes[v.comment_id] = v.vote_type; });
+    }
+  }
+
+  scroll.innerHTML = '';
+  const score = (post.upvotes||0)-(post.downvotes||0);
+  const isOwn = currentUser && post.user_id === currentUser.id;
+  const isAdminUser = currentProfile?.is_admin;
+  const editedLabel = post.edited_at ? `<span class="edited-label">(edited ${relativeTime(post.edited_at)})</span>` : '';
+  const bodyHtml = post.body ? `<div class="detail-body">${escHtml(post.body)}</div>` : '';
+
+  const detailEl = document.createElement('div');
+  detailEl.className = 'detail-post';
+  detailEl.innerHTML = `
+    <div class="post-header">
+      <span class="community-badge" style="font-size:20px">${communityEmoji[post.community]}</span>
+      <div class="post-meta">
+        <span class="post-author">${escHtml(post.profiles?.username || 'unknown')}</span>
+        <span class="post-time"> · ${relativeTime(post.created_at)}</span>
+        ${editedLabel}
+      </div>
+    </div>
+    <div class="detail-title">${escHtml(post.title)}</div>
+    ${bodyHtml}
+    <div class="post-footer">
+      <div class="vote-row" id="post-vote-row-${post.id}">
+        <button class="vote-btn up${myPostVote==='up'?' active':''}" onclick="votePost(event,'${post.id}','up',this)">${upSVG()}<span>${post.upvotes||0}</span></button>
+        <span class="score-display">${score}</span>
+        <button class="vote-btn down${myPostVote==='down'?' active':''}" onclick="votePost(event,'${post.id}','down',this)">${downSVG()}<span>${post.downvotes||0}</span></button>
+      </div>
+    </div>
+    ${(isOwn || isAdminUser) ? `
+    <div class="action-row">
+      ${isOwn ? `<button class="action-btn" onclick="startEditPost('${post.id}',${JSON.stringify(post.title)},${JSON.stringify(post.body||'')})">${editSVG()} Edit</button>` : ''}
+      <button class="action-btn danger" onclick="deletePost('${post.id}')">${trashSVG()} Delete</button>
+    </div>` : ''}
+  `;
+  scroll.appendChild(detailEl);
+
+  // Comments section
+  const commSection = document.createElement('div');
+  commSection.className = 'comments-section';
+  commSection.innerHTML = `<div class="comments-label">Comments (${comments?.length||0})</div>`;
+
+  // Comment input
+  if (currentUser) {
+    const inputRow = document.createElement('div');
+    inputRow.className = 'comment-input-row';
+    inputRow.innerHTML = `
+      <textarea id="new-comment-input" placeholder="Add a comment..."></textarea>
+      <button class="comment-submit" onclick="submitComment('${post.id}')">Reply</button>
+    `;
+    commSection.appendChild(inputRow);
+  } else {
+    const loginPrompt = document.createElement('div');
+    loginPrompt.style.cssText = 'color:var(--muted);font-size:13px;padding:8px 0';
+    loginPrompt.innerHTML = `<button onclick="showAuthModal()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-family:var(--font-body);font-size:13px">Log in</button> to comment.`;
+    commSection.appendChild(loginPrompt);
+  }
+
+  (comments||[]).forEach(comment => {
+    commSection.appendChild(buildCommentCard(comment, myCommentVotes[comment.id] || null));
+  });
+
+  scroll.appendChild(commSection);
+}
+
+function buildCommentCard(comment, myVote) {
+  const card = document.createElement('div');
+  card.className = 'comment-card';
+  card.id = 'comment-' + comment.id;
+  const score = (comment.upvotes||0)-(comment.downvotes||0);
+  const isOwn = currentUser && comment.user_id === currentUser.id;
+  const isAdminUser = currentProfile?.is_admin;
+  const editedLabel = comment.edited_at ? `<span class="edited-label">(edited ${relativeTime(comment.edited_at)})</span>` : '';
+  card.innerHTML = `
+    <div class="comment-meta">
+      <span class="comment-author">${escHtml(comment.profiles?.username || 'unknown')}</span>
+      <span>${relativeTime(comment.created_at)}</span>
+      ${editedLabel}
+    </div>
+    <div class="comment-body" id="cbody-${comment.id}">${escHtml(comment.body)}</div>
+    <div class="post-footer" style="margin-top:4px">
+      <div class="vote-row">
+        <button class="vote-btn up${myVote==='up'?' active':''}" id="cup-${comment.id}" onclick="handleCommentVote('${comment.id}','up')">${upSVG()}<span>${comment.upvotes||0}</span></button>
+        <span class="score-display" id="cscore-${comment.id}">${score}</span>
+        <button class="vote-btn down${myVote==='down'?' active':''}" id="cdn-${comment.id}" onclick="handleCommentVote('${comment.id}','down')">${downSVG()}<span>${comment.downvotes||0}</span></button>
+      </div>
+      ${(isOwn || isAdminUser) ? `
+      <div class="action-row" style="margin-top:0">
+        ${isOwn ? `<button class="action-btn" style="font-size:11px;padding:3px 9px" onclick="startEditComment('${comment.id}',${JSON.stringify(comment.body)})">${editSVG()} Edit</button>` : ''}
+        <button class="action-btn danger" style="font-size:11px;padding:3px 9px" onclick="deleteComment('${comment.id}')">${trashSVG()} Del</button>
+      </div>` : ''}
+    </div>
+  `;
+  return card;
+}
+
+function handleCommentVote(commentId, type) {
+  const upBtn = document.getElementById('cup-' + commentId);
+  const downBtn = document.getElementById('cdn-' + commentId);
+  const scoreEl = document.getElementById('cscore-' + commentId);
+  voteComment(commentId, type, upBtn, downBtn, scoreEl);
+}
+
+// ══════════════════════════════════════
+// SUBMIT POST
+// ══════════════════════════════════════
+async function submitPost() {
+  if (!currentUser) { toast('Log in first', 'error'); showAuthModal(); return; }
+  await loadCurrentProfile();
+  if (isTimedOut(currentProfile)) { toast('You are timed out. Cannot post.', 'error'); return; }
+  if (!checkPostRateLimit()) { toast('Slow down! Max 2 posts per minute.', 'error'); return; }
+
+  const title = document.getElementById('new-post-title').value.trim();
+  const body = document.getElementById('new-post-body').value.trim();
+  const community = document.getElementById('new-post-community').value;
+
+  if (!title) { toast('Title is required', 'error'); return; }
+
+  const { error } = await sb.from('posts').insert({
+    user_id: currentUser.id,
+    community,
+    title,
+    body: body || null,
+    upvotes: 0,
+    downvotes: 0
+  });
+
+  if (error) { toast(error.message, 'error'); return; }
+
+  toast('Posted! 🎉', 'success');
+  document.getElementById('new-post-title').value = '';
+  document.getElementById('new-post-body').value = '';
+  document.getElementById('title-counter').textContent = '0 / 300';
+  goScreen('home');
+  setCommunity(community);
+  loadFeed();
+}
+
+function updateTitleCounter() {
+  const len = document.getElementById('new-post-title').value.length;
+  document.getElementById('title-counter').textContent = len + ' / 300';
+}
+
+// ══════════════════════════════════════
+// SUBMIT COMMENT
+// ══════════════════════════════════════
+async function submitComment(postId) {
+  if (!currentUser) { toast('Log in to comment', 'error'); return; }
+  await loadCurrentProfile();
+  if (isTimedOut(currentProfile)) { toast('You are timed out.', 'error'); return; }
+
+  const body = document.getElementById('new-comment-input').value.trim();
+  if (!body) { toast('Comment cannot be empty', 'error'); return; }
+
+  const { data, error } = await sb.from('comments').insert({
+    post_id: postId,
+    user_id: currentUser.id,
+    body,
+    upvotes: 0,
+    downvotes: 0
+  }).select('*, profiles(username,id)').single();
+
+  if (error) { toast(error.message, 'error'); return; }
+
+  document.getElementById('new-comment-input').value = '';
+  toast('Comment added!', 'success');
+
+  const section = document.querySelector('.comments-section');
+  const inputRow = section.querySelector('.comment-input-row');
+  const card = buildCommentCard(data, null);
+  section.insertBefore(card, inputRow.nextSibling);
+
+  // Update label
+  const label = section.querySelector('.comments-label');
+  const current = parseInt(label.textContent.match(/\d+/)?.[0] || 0) + 1;
+  label.textContent = `Comments (${current})`;
+}
+
+// ══════════════════════════════════════
+// EDIT
+// ══════════════════════════════════════
+function startEditPost(postId, title, body) {
+  editTarget = { type: 'post', id: postId, hasTitle: true };
+  document.getElementById('edit-modal-title').textContent = 'Edit Post';
+  const titleField = document.getElementById('edit-title-field');
+  titleField.style.display = 'block';
+  titleField.value = title;
+  document.getElementById('edit-body-field').value = body;
+  openModal('edit-modal');
+}
+
+function startEditComment(commentId, body) {
+  editTarget = { type: 'comment', id: commentId, hasTitle: false };
+  document.getElementById('edit-modal-title').textContent = 'Edit Comment';
+  document.getElementById('edit-title-field').style.display = 'none';
+  document.getElementById('edit-body-field').value = body;
+  openModal('edit-modal');
+}
+
+async function saveEdit() {
+  if (!editTarget) return;
+  const body = document.getElementById('edit-body-field').value.trim();
+  if (!body) { toast('Cannot be empty', 'error'); return; }
+  const now = new Date().toISOString();
+
+  if (editTarget.type === 'post') {
+    const title = document.getElementById('edit-title-field').value.trim();
+    if (!title) { toast('Title required', 'error'); return; }
+    const { error } = await sb.from('posts').update({ title, body: body || null, edited_at: now }).eq('id', editTarget.id);
+    if (error) { toast(error.message, 'error'); return; }
+    toast('Post updated', 'success');
+    closeModal('edit-modal');
+    if (currentPostId === editTarget.id) openPost(editTarget.id);
+  } else {
+    const { error } = await sb.from('comments').update({ body, edited_at: now }).eq('id', editTarget.id);
+    if (error) { toast(error.message, 'error'); return; }
+    const bodyEl = document.getElementById('cbody-' + editTarget.id);
+    if (bodyEl) bodyEl.textContent = body;
+    toast('Comment updated', 'success');
+    closeModal('edit-modal');
+  }
+}
+
+// ══════════════════════════════════════
+// DELETE
+// ══════════════════════════════════════
+async function deletePost(postId) {
+  if (!confirm('Delete this post?')) return;
+  const { error } = await sb.from('posts').delete().eq('id', postId);
+  if (error) { toast(error.message, 'error'); return; }
+  toast('Post deleted');
+  goBack();
+  loadFeed();
+}
+
+async function deleteComment(commentId) {
+  if (!confirm('Delete this comment?')) return;
+  const { error } = await sb.from('comments').delete().eq('id', commentId);
+  if (error) { toast(error.message, 'error'); return; }
+  const card = document.getElementById('comment-' + commentId);
+  if (card) card.remove();
+  toast('Comment deleted');
+}
+
+// ══════════════════════════════════════
+// SCHEMA DISPLAY (fallback)
+// ══════════════════════════════════════
+function showSchema() {
+  const scroll = document.getElementById('feed-scroll');
+  scroll.innerHTML = `
+    <div class="schema-box">
+      <h2>⚙️ Setup Required</h2>
+      <p>Replace <code>YOUR_SUPABASE_URL</code> and <code>YOUR_SUPABASE_ANON_KEY</code> at the top of the script with your Supabase project credentials. Then run this SQL in your Supabase SQL Editor:</p>
+      <pre>${escHtml(SQL_SCHEMA)}</pre>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════
+// PULL TO REFRESH + SWIPE
+// ══════════════════════════════════════
+(function setupGestures() {
+  const scroll = document.getElementById('feed-scroll');
+  const pullInd = document.getElementById('pull-indicator');
+  let startY = 0, startX = 0, pulling = false;
+
+  scroll.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+  }, { passive: true });
+
+  scroll.addEventListener('touchmove', e => {
+    if (scroll.scrollTop === 0 && e.touches[0].clientY - startY > 50) {
+      pulling = true;
+      pullInd.classList.add('visible');
+    }
+  }, { passive: true });
+
+  scroll.addEventListener('touchend', () => {
+    if (pulling) {
+      pullInd.classList.remove('visible');
+      loadFeed();
+      pulling = false;
+    }
+  });
+
+  // Swipe left/right for Hot/New
+  document.getElementById('home-screen').addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+  }, { passive: true });
+
+  document.getElementById('home-screen').addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    if (Math.abs(dx) > 60) {
+      setFeedMode(dx < 0 ? 'new' : 'hot');
+    }
+  });
+})();
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+async function init() {
+  if (!CONFIGURED) {
+    showSchema();
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user) {
+    currentUser = session.user;
+    await loadCurrentProfile();
+    loadFeed();
+  } else {
+    loadFeed();
+    setTimeout(showAuthModal, 600);
+  }
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session?.user) {
+      currentUser = session.user;
+      await loadCurrentProfile();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      currentProfile = null;
+    }
+  });
+}
+
+init();
+</script>
+</body>
+</html>

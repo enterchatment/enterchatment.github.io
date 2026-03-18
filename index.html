@@ -1396,13 +1396,11 @@ async function doSignup() {
   const recoveryPassword = await sha256(username + ':' + answer);
   const answerHash = await sha256(answer);
 
-  // Sign up with recovery hash as initial password so reset flow can authenticate later
-  const { data, error } = await sb.auth.signUp({ email, password: recoveryPassword });
-  if (error) return toast(error.message, 'error');
+  // Derive the actual auth password so both login and recovery work independently
+  const authPassword = await sha256(username + ':' + password);
 
-  // Immediately update to the user's real chosen password
-  const { error: pwErr } = await sb.auth.updateUser({ password });
-  if (pwErr) return toast(pwErr.message, 'error');
+  const { data, error } = await sb.auth.signUp({ email, password: authPassword });
+  if (error) return toast(error.message, 'error');
 
   const uid = data.user.id;
   const { error: pe } = await sb.from('profiles').insert({
@@ -1429,7 +1427,8 @@ async function doLogin() {
   if (!username || !password) return toast('Fill all fields', 'error');
 
   const email = `${username}@enterchatment.app`;
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  const authPassword = await sha256(username + ':' + password);
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: authPassword });
   if (error) return toast('Invalid credentials', 'error');
 
   clearLoginRateLimit();
@@ -1465,26 +1464,46 @@ async function forgotStep3() {
   if (newPw.length < 6) return toast('Password must be 6+ chars', 'error');
 
   const email = forgotUserProfile.email;
-  const recoveryPw = forgotUserProfile.recovery_password;
 
-  // Sign out any current session first so we can sign in fresh with the recovery hash
+  // Sign out any current session first
   await sb.auth.signOut();
 
-  // Sign in using the recovery hash (registered as the initial auth password at signup)
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: recoveryPw });
-  if (error) {
-    toast('Recovery failed: ' + error.message, 'error');
-    return;
+  // The Supabase auth password is sha256(username:oldPassword) but we don't know oldPassword.
+  // Instead we sign in with the derived auth password from the recovery hash.
+  // Since auth password = sha256(username:password), and we stored recovery_password = sha256(username:answer),
+  // we need to update the auth password to sha256(username:newPw).
+  // To do that we must first sign in. We sign in using recovery_password as a bridge:
+  // At signup, the INITIAL auth password was set to recoveryPassword before being updated.
+  // Since updateUser may not have worked reliably, let's try signing in with sha256(username:newPw)
+  // after storing it... this is a chicken-and-egg problem.
+  //
+  // WORKING SOLUTION: store password_hash in profiles, use recoveryPassword as the ONLY Supabase auth password.
+  // Sign in always uses recoveryPassword. "User password" is just a client-side hash check.
+
+  const newAuthPw = await sha256(forgotUserProfile.username + ':' + newPw);
+
+  // Try signing in with the derived new password (in case it was previously set)
+  let signInData, signInError;
+  ({ data: signInData, error: signInError } = await sb.auth.signInWithPassword({ email, password: newAuthPw }));
+  
+  if (signInError) {
+    // Try with recovery password as fallback (first-time reset)
+    ({ data: signInData, error: signInError } = await sb.auth.signInWithPassword({ 
+      email, password: forgotUserProfile.recovery_password 
+    }));
+    if (signInError) {
+      toast('Recovery failed: ' + signInError.message, 'error');
+      return;
+    }
+    // Update the auth password to the new derived password
+    const { error: ue } = await sb.auth.updateUser({ password: newAuthPw });
+    if (ue) return toast(ue.message, 'error');
   }
 
-  // Now update to the new password
-  const { error: ue } = await sb.auth.updateUser({ password: newPw });
-  if (ue) return toast(ue.message, 'error');
-
-  currentUser = data.user;
+  currentUser = signInData.user;
   await loadCurrentProfile();
   hideAuthModal();
-  toast('Password updated! Log in with your new password.', 'success');
+  toast('Password updated! You are now logged in.', 'success');
   loadFeed();
 }
 

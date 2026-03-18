@@ -1464,19 +1464,27 @@ async function forgotStep3() {
   const newPw = document.getElementById('forgot-new-password').value;
   if (newPw.length < 6) return toast('Password must be 6+ chars', 'error');
 
-  // Sign in using the recovery hash (set as the initial auth password at signup)
   const email = forgotUserProfile.email;
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: forgotUserProfile.recovery_password });
+  const recoveryPw = forgotUserProfile.recovery_password;
+
+  // Sign out any current session first so we can sign in fresh with the recovery hash
+  await sb.auth.signOut();
+
+  // Sign in using the recovery hash (registered as the initial auth password at signup)
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: recoveryPw });
   if (error) {
-    toast('Incorrect security answer or account issue.', 'error');
+    toast('Recovery failed: ' + error.message, 'error');
     return;
   }
+
+  // Now update to the new password
   const { error: ue } = await sb.auth.updateUser({ password: newPw });
   if (ue) return toast(ue.message, 'error');
+
   currentUser = data.user;
   await loadCurrentProfile();
   hideAuthModal();
-  toast('Password updated!', 'success');
+  toast('Password updated! Log in with your new password.', 'success');
   loadFeed();
 }
 
